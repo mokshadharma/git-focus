@@ -7,14 +7,14 @@ source repository, replaying all non-baseline commits while preserving
 commit messages, authors, and timestamps.
 
 Usage:
-    ./git-focus-sync.py [--destination <dir>] [--force]
+    ./git-focus-sync.py --source <dir> --destination <dir> [--force]
     ./git-focus-sync.py --help
 
 Examples:
-    ./git-focus-sync.py
-    ./git-focus-sync.py --destination ~/work/ephemeral-001
-    ./git-focus-sync.py --force --quiet
-    ./git-focus-sync.py --dry-run
+    ./git-focus-sync.py --source ./ephemeral --destination ~/monorepo
+    ./git-focus-sync.py --destination ~/monorepo
+    ./git-focus-sync.py --force --quiet --destination ~/monorepo
+    ./git-focus-sync.py --dry-run --destination ~/monorepo
 
 For more information, see ephemeral-repo-create-and-sync-specifications.md
 """
@@ -52,7 +52,7 @@ def print_usage():
     """
     Print brief usage information to stderr.
     """
-    sys.stderr.write("Usage: git-focus-sync.py [--destination <dir>] [--force]\n")
+    sys.stderr.write("Usage: git-focus-sync.py --destination <dir> [--source <dir>] [--force]\n")
     sys.stderr.write("       git-focus-sync.py --help\n")
 
 
@@ -66,8 +66,11 @@ Ephemeral Repository Synchronization Script
 Synchronizes commits from an ephemeral repository back to the original
 source repository, replaying all non-baseline commits.
 
+Required Arguments:
+  --destination <dir>    Path to the original source repository to sync changes to.
+
 Optional Arguments:
-  --destination <dir>    Path to ephemeral repository (default: current directory)
+  --source <dir>         Path to the ephemeral repository (default: current directory)
   --metadata <path>      Custom metadata filename (default: metadata)
   --force               Skip confirmation prompt
   --dry-run             Show what would be done without doing it
@@ -101,18 +104,14 @@ def parse_arguments():
         argparse.Namespace: Parsed arguments, or None if invalid
     """
     parser = argparse.ArgumentParser(add_help=False)
-    parser.add_argument('--destination', type=str, help='Path to ephemeral repository')
+    parser.add_argument('--source', type=str, help='Path to the ephemeral repository to sync from')
+    parser.add_argument('--destination', type=str, help='Path to the original repository to sync to')
     parser.add_argument('--metadata', type=str, default=DEFAULT_METADATA_FILENAME,
                        help='Custom metadata filename')
     parser.add_argument('--force', action='store_true', help='Skip confirmation prompt')
     parser.add_argument('--dry-run', action='store_true', help='Show what would be done')
     parser.add_argument('--quiet', action='store_true', help='Suppress warnings and non-error output')
     parser.add_argument('--help', action='store_true', help='Show help message')
-
-    # Check if no arguments provided
-    if len(sys.argv) == 1:
-        # This is actually valid - use current directory as default
-        pass
 
     try:
         args = parser.parse_args()
@@ -124,6 +123,12 @@ def parse_arguments():
     if args.help:
         print_help()
         sys.exit(0)
+
+    # Manually check for required --destination argument
+    if not args.destination:
+        sys.stderr.write("Error: Missing required argument: --destination\n")
+        print_usage()
+        return None
 
     return args
 
@@ -1413,15 +1418,14 @@ def main():
     if args is None:
         sys.exit(1)
 
-    # Validate argument types
-    if not validate_argument_types(args):
-        sys.exit(1)
-
-    # Determine ephemeral repository path
-    if args.destination:
-        ephemeral_path = resolve_path(args.destination)
+    # Determine ephemeral repository path (source)
+    if args.source:
+        ephemeral_path = resolve_path(args.source)
     else:
         ephemeral_path = Path.cwd()
+
+    # The destination is now the original repo path
+    original_repo_path = resolve_path(args.destination)
 
     quiet = args.quiet
     dry_run = args.dry_run
@@ -1439,12 +1443,18 @@ def main():
     if metadata is None:
         sys.exit(1)
 
+    # Validate that the destination from args matches metadata
+    if str(original_repo_path) != metadata['original_repo_path']:
+        sys.stderr.write("Error: The --destination path does not match the 'original_repo_path' in the metadata file.\n")
+        sys.stderr.write(f"  --destination: {original_repo_path}\n")
+        sys.stderr.write(f"  Metadata says: {metadata['original_repo_path']}\n")
+        sys.exit(1)
+
     # Validate metadata integrity
     if not validate_metadata_integrity(metadata_path, metadata['manifest_version'], quiet):
         sys.exit(1)
 
     # Validate repositories
-    original_repo_path = metadata['original_repo_path']
     if not validate_repositories(original_repo_path, ephemeral_path, quiet):
         sys.exit(1)
 
@@ -1491,6 +1501,8 @@ def main():
 
             if not sync_success:
                 sys.stderr.write(f"\nSync failed during commit replay.\n")
+                # The __exit__ method of the context manager will handle cleanup
+                # To be safe, we exit here to prevent any further execution.
                 sys.exit(1)
 
             # Mark success so context manager knows to merge
