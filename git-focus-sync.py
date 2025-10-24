@@ -1483,24 +1483,31 @@ def main():
             sys.exit(1)
 
     # Use context manager for temporary branch operations
+    sync_was_successful = False
     try:
         with TemporaryBranch(original_path, branch_name, quiet) as temp_branch:
             # Replay commits on temporary branch
             if not quiet:
                 print()
 
-            sync_success = replay_commits(commits, ephemeral_path, original_path, quiet)
+            sync_was_successful = replay_commits(commits, ephemeral_path, original_path, quiet)
 
-            if not sync_success:
+            if sync_was_successful:
+                # Mark success so context manager knows to merge
+                temp_branch.mark_success()
+            else:
                 sys.stderr.write(f"\nSync failed during commit replay.\n")
-                # The __exit__ method of the context manager will handle cleanup
-                # To be safe, we exit here to prevent any further execution.
-                sys.exit(1)
+                # The 'with' block will now exit, and the context manager's
+                # __exit__ method will handle cleanup for the failure case.
 
-            # Mark success so context manager knows to merge
-            temp_branch.mark_success()
+    except RuntimeError as e:
+        sys.stderr.write(f"Error: {e}\n")
+        sync_was_successful = False
+    except Exception as e:
+        sys.stderr.write(f"Unexpected error: {e}\n")
+        sync_was_successful = False
 
-        # Context manager has handled merge and cleanup
+    if sync_was_successful:
         # Success!
         if not quiet:
             print(f"\n{'='*60}")
@@ -1510,14 +1517,10 @@ def main():
             print(f"Original repository: {original_repo_path}")
             print(f"Branch: {branch_name if branch_name else '(detached HEAD)'}")
             print(f"\nThe ephemeral repository can now be safely deleted.")
-
         sys.exit(0)
-
-    except RuntimeError as e:
-        sys.stderr.write(f"Error: {e}\n")
-        sys.exit(1)
-    except Exception as e:
-        sys.stderr.write(f"Unexpected error: {e}\n")
+    else:
+        # The context manager will have already handled cleanup prompts.
+        # We just need to exit with an error code.
         sys.exit(1)
 
 
