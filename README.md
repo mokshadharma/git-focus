@@ -77,20 +77,22 @@ Because the repository is small and focused, the LLM can use its full context wi
 
 Once the LLM has finished its work and created one or more commits, use `git-focus-sync.py` to merge the changes back into the original monorepo.
 
-**Navigate to the ephemeral repository directory** and run the script.
-
 **Command:**
 ```bash
-cd /path/to/new_ephemeral_repo
-./git-focus-sync.py
+./git-focus-sync.py --source /path/to/new_ephemeral_repo --destination /path/to/monorepo
 ```
-*(Note: The script is designed to be run from within the ephemeral repository, but you can also specify its location with `--destination`)*.
+
+*(Note: If you run the script from within the ephemeral repository, you can omit the `--source` argument.)*
+
+**Arguments:**
+*   `--source`: The path to the ephemeral repository containing the new changes (defaults to the current directory).
+*   `--destination`: The path to the original monorepo where the changes will be synced.
 
 This script will:
-1.  Read the `metadata` file to find the original repository and baseline commit.
+1.  Read the `metadata` file from the source to find the original repository path and baseline commit.
 2.  Perform extensive safety checks to prevent data loss or incorrect merges.
 3.  Identify all new commits made by the LLM.
-4.  Create a temporary branch in the original monorepo.
+4.  Create a temporary branch in the destination monorepo.
 5.  Replay each new commit onto the temporary branch, preserving the author, message, and timestamp.
 6.  If successful, merge the temporary branch into your original working branch and clean up.
 
@@ -106,5 +108,5 @@ Both scripts support a `--dry-run` flag, which allows you to preview the actions
 ./git-focus-create.py --source ... --subset ... --destination ... --dry-run
 
 # Preview the synchronization process
-./git-focus-sync.py --dry-run
+./git-focus-sync.py --source ... --destination ... --dry-run
 ```
