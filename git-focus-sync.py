@@ -1203,11 +1203,24 @@ def validate_sync_safety(original_repo_path, ephemeral_path, metadata, quiet=Fal
         if not verify_branch_match(original_repo_path, metadata['source_branch'], quiet):
             return False
     else:
-        # Older metadata without source_branch - just warn
+        # If source_branch is not in metadata, warn and prompt the user.
         branch_name = get_current_branch(Path(original_repo_path))
-        if branch_name and not quiet:
-            sys.stderr.write(f"Warning: Metadata does not contain source branch information.\n")
-            sys.stderr.write(f"Cannot verify branch match. Proceeding with current branch: {branch_name}\n")
+        sys.stderr.write(f"Warning: Metadata does not contain source branch information.\n")
+        sys.stderr.write(f"This can happen if the ephemeral repo was created with an older script version.\n")
+
+        if branch_name:
+            sys.stderr.write(f"The destination repository is currently on branch: '{branch_name}'.\n")
+            sys.stderr.write(f"Proceed with syncing to this branch? [y/N]: ")
+            sys.stderr.flush()
+            choice = sys.stdin.readline().strip().lower()
+            if choice not in ['y', 'yes']:
+                sys.stderr.write("Aborted by user.\n")
+                return False
+        else:
+            # Destination is in detached HEAD state, which is an error condition.
+            sys.stderr.write(f"Error: Destination repository is in a detached HEAD state.\n")
+            sys.stderr.write(f"Cannot proceed without a target branch.\n")
+            return False
 
     if not verify_baseline_commit(original_repo_path, metadata['baseline_commit'], quiet):
         return False
