@@ -7,14 +7,13 @@ source repository, replaying all non-baseline commits while preserving
 commit messages, authors, and timestamps.
 
 Usage:
-    ./git-focus-sync.py --source <dir> --destination <dir> [--force]
+    ./git-focus-sync.py [--source <dir>] [--destination <dir>] [--force]
     ./git-focus-sync.py --help
 
 Examples:
-    ./git-focus-sync.py --source ./ephemeral --destination ~/monorepo
-    ./git-focus-sync.py --destination ~/monorepo
-    ./git-focus-sync.py --force --quiet --destination ~/monorepo
-    ./git-focus-sync.py --dry-run --destination ~/monorepo
+    ./git-focus-sync.py --source ./ephemeral
+    ./git-focus-sync.py --destination ~/monorepo_clone
+    ./git-focus-sync.py --force --quiet --source ./ephemeral
 
 For more information, see ephemeral-repo-create-and-sync-specifications.md
 """
@@ -52,7 +51,7 @@ def print_usage():
     """
     Print brief usage information to stderr.
     """
-    sys.stderr.write("Usage: git-focus-sync.py --destination <dir> [--source <dir>] [--force]\n")
+    sys.stderr.write("Usage: git-focus-sync.py [--source <dir>] [--destination <dir>] [--force]\n")
     sys.stderr.write("       git-focus-sync.py --help\n")
 
 
@@ -66,26 +65,25 @@ Ephemeral Repository Synchronization Script
 Synchronizes commits from an ephemeral repository back to the original
 source repository, replaying all non-baseline commits.
 
-Required Arguments:
-  --destination <dir>    Path to the original source repository to sync changes to.
-
 Optional Arguments:
-  --source <dir>         Path to the ephemeral repository (default: current directory)
-  --metadata <path>      Custom metadata filename (default: metadata)
-  --force               Skip confirmation prompt
-  --dry-run             Show what would be done without doing it
-  --quiet               Suppress warnings and non-error output
-  --help                Show this help message
+  --source <dir>         Path to the ephemeral repository (default: current directory).
+  --destination <dir>    Override the original repository path stored in the metadata.
+                         Use this if the original repository has been moved or cloned.
+  --metadata <path>      Custom metadata filename (default: metadata).
+  --force               Skip confirmation prompt.
+  --dry-run             Show what would be done without doing it.
+  --quiet               Suppress warnings and non-error output.
+  --help                Show this help message.
 
 Behavior:
-  - Verifies metadata integrity (checksum and baseline commit)
-  - Checks for uncommitted changes in both repositories
-  - Verifies branch matches the source branch
-  - Creates temporary branch for sync operations
-  - Detects files outside the original subset definition
-  - Replays all commits from ephemeral repo to temporary branch
-  - Preserves commit messages, authors, and timestamps
-  - Merges temporary branch on success or offers cleanup on failure
+  - Verifies metadata integrity (checksum and baseline commit).
+  - Checks for uncommitted changes in both repositories.
+  - Verifies branch matches the source branch.
+  - Creates temporary branch for sync operations.
+  - Detects files outside the original subset definition.
+  - Replays all commits from ephemeral repo to temporary branch.
+  - Preserves commit messages, authors, and timestamps.
+  - Merges temporary branch on success or offers cleanup on failure.
 
 Exit Codes:
   0 - Success
@@ -105,7 +103,7 @@ def parse_arguments():
     """
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument('--source', type=str, help='Path to the ephemeral repository to sync from')
-    parser.add_argument('--destination', type=str, help='Path to the original repository to sync to')
+    parser.add_argument('--destination', type=str, help='Override path to the original repository to sync to')
     parser.add_argument('--metadata', type=str, default=DEFAULT_METADATA_FILENAME,
                        help='Custom metadata filename')
     parser.add_argument('--force', action='store_true', help='Skip confirmation prompt')
@@ -123,12 +121,6 @@ def parse_arguments():
     if args.help:
         print_help()
         sys.exit(0)
-
-    # Manually check for required --destination argument
-    if not args.destination:
-        sys.stderr.write("Error: Missing required argument: --destination\n")
-        print_usage()
-        return None
 
     return args
 
@@ -484,7 +476,7 @@ def parse_metadata(metadata_path, quiet=False):
             print(f"  Session ID: {metadata['session_id']}")
             print(f"  Manifest version: {metadata['manifest_version']}")
             print(f"  Baseline commit: {metadata['baseline_commit']}")
-            print(f"  Original repository: {metadata['original_repo_path']}")
+            print(f"  Original repository (from metadata): {metadata['original_repo_path']}")
             if 'source_branch' in metadata:
                 print(f"  Source branch: {metadata['source_branch']}")
             print(f"  Subset paths: {len(metadata['subset']['paths'])}")
@@ -1424,9 +1416,6 @@ def main():
     else:
         ephemeral_path = Path.cwd()
 
-    # The destination is now the original repo path
-    original_repo_path = resolve_path(args.destination)
-
     quiet = args.quiet
     dry_run = args.dry_run
     force = args.force
@@ -1443,12 +1432,15 @@ def main():
     if metadata is None:
         sys.exit(1)
 
-    # Validate that the destination from args matches metadata
-    if str(original_repo_path) != metadata['original_repo_path']:
-        sys.stderr.write("Error: The --destination path does not match the 'original_repo_path' in the metadata file.\n")
-        sys.stderr.write(f"  --destination: {original_repo_path}\n")
-        sys.stderr.write(f"  Metadata says: {metadata['original_repo_path']}\n")
-        sys.exit(1)
+    # Determine the destination repository path
+    if args.destination:
+        # Use the user-provided destination as an override
+        original_repo_path = resolve_path(args.destination)
+        if not quiet:
+            print(f"✓ Using destination override: {original_repo_path}")
+    else:
+        # Use the destination from the metadata file
+        original_repo_path = resolve_path(metadata['original_repo_path'])
 
     # Validate metadata integrity
     if not validate_metadata_integrity(metadata_path, metadata['manifest_version'], quiet):
