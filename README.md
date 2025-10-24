@@ -65,7 +65,7 @@ First, use `git-focus-create.py` to generate the isolated repository for the LLM
 *   `--subset`: The path to the file defining the subset of files to include.
 *   `--destination`: The directory where the new ephemeral repository will be created.
 
-This command performs several safety checks (e.g., for uncommitted changes) and then creates the new repository at the destination path. It will contain an initial commit representing the "baseline" state and a `metadata` file required for the sync process.
+This command performs several safety checks (e.g., for uncommitted changes) and then creates the new repository at the destination path. It will contain an initial commit representing the "baseline" state and a hidden `.git-focus-metadata` file required for the sync process.
 
 ### Step 2: Let the LLM Work
 
@@ -92,7 +92,7 @@ This simplest command works if the original monorepo has not moved. For more com
 *   `--destination`: An optional override for the path to the original monorepo. Use this if the original repository has been moved, cloned, or if you wish to sync to a different fork.
 
 This script will:
-1.  Read the `metadata` file from the source to determine the default destination and baseline commit.
+1.  Read the `.git-focus-metadata` file from the source to determine the default destination and baseline commit.
 2.  Perform extensive safety checks to prevent data loss or incorrect merges.
 3.  Identify all new commits made by the LLM.
 4.  Create a temporary branch in the destination monorepo.

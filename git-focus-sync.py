@@ -32,7 +32,7 @@ from datetime import datetime, timezone
 MANIFEST_VERSION = "1.0"
 
 # Default metadata filename
-DEFAULT_METADATA_FILENAME = "metadata"
+DEFAULT_METADATA_FILENAME = ".git-focus-metadata"
 
 
 def handle_sigint(signum, frame):
@@ -59,7 +59,7 @@ def print_help():
     """
     Print detailed help information to stderr.
     """
-    help_text = """
+    help_text = f"""
 Ephemeral Repository Synchronization Script
 
 Synchronizes commits from an ephemeral repository back to the original
@@ -69,7 +69,7 @@ Optional Arguments:
   --source <dir>         Path to the ephemeral repository (default: current directory).
   --destination <dir>    Override the original repository path stored in the metadata.
                          Use this if the original repository has been moved or cloned.
-  --metadata <path>      Custom metadata filename (default: metadata).
+  --metadata <path>      Custom metadata filename (default: {DEFAULT_METADATA_FILENAME}).
   --force               Skip confirmation prompt.
   --dry-run             Show what would be done without doing it.
   --quiet               Suppress warnings and non-error output.
@@ -974,7 +974,7 @@ def expand_subset_paths_to_files(subset_paths, original_repo_path):
     return files
 
 
-def detect_outofscope_files(ephemeral_path, subset_paths, original_repo_path, quiet=False):
+def detect_outofscope_files(ephemeral_path, subset_paths, original_repo_path, metadata_filename, quiet=False):
     """
     Detect files in ephemeral repository that are outside the original subset.
 
@@ -982,6 +982,7 @@ def detect_outofscope_files(ephemeral_path, subset_paths, original_repo_path, qu
         ephemeral_path: Path to ephemeral repository
         subset_paths: List of original subset paths
         original_repo_path: Path to original repository
+        metadata_filename: The name of the metadata file to ignore.
         quiet: Whether to suppress output
 
     Returns:
@@ -993,8 +994,8 @@ def detect_outofscope_files(ephemeral_path, subset_paths, original_repo_path, qu
         return False
 
     # Remove metadata files from consideration
-    ephemeral_files.discard('metadata')
-    ephemeral_files.discard('metadata.sha256')
+    ephemeral_files.discard(metadata_filename)
+    ephemeral_files.discard(f"{metadata_filename}.sha256")
 
     # Expand subset paths to expected files
     expected_files = expand_subset_paths_to_files(subset_paths, original_repo_path)
@@ -1206,7 +1207,7 @@ def validate_sync_safety(original_repo_path, ephemeral_path, metadata, quiet=Fal
         # If source_branch is not in metadata, warn and prompt the user.
         branch_name = get_current_branch(Path(original_repo_path))
         sys.stderr.write(f"Warning: Metadata does not contain source branch information.\n")
-        sys.stderr.write(f"This can happen if the ephemeral repo was created with an older script version.\n")
+        sys.stderr.write(f"This can happen if the ephemeral repo was created with an older script version.\n\n")
 
         if branch_name:
             sys.stderr.write(f"The destination repository is currently on branch: '{branch_name}'.\n")
@@ -1238,7 +1239,8 @@ def validate_sync_safety(original_repo_path, ephemeral_path, metadata, quiet=Fal
         ephemeral_path,
         metadata['subset']['paths'],
         original_repo_path,
-        quiet
+        metadata_filename=os.path.basename(str(ephemeral_path / DEFAULT_METADATA_FILENAME)),
+        quiet=quiet
     ):
         return False
 

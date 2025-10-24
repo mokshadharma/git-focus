@@ -34,7 +34,7 @@ import stat
 MANIFEST_VERSION = "1.0"
 
 # Default metadata filename
-DEFAULT_METADATA_FILENAME = "metadata"
+DEFAULT_METADATA_FILENAME = ".git-focus-metadata"
 
 
 def handle_sigint(signum, frame):
@@ -61,7 +61,7 @@ def print_help():
     """
     Print detailed help information to stderr.
     """
-    help_text = """
+    help_text = f"""
 Ephemeral Repository Creation Script
 
 Creates an isolated ephemeral git repository containing only a specified
@@ -73,7 +73,7 @@ Required Arguments:
   --destination <dir>    Directory where ephemeral repository will be created
 
 Optional Arguments:
-  --metadata <path>      Custom metadata filename (default: metadata)
+  --metadata <path>      Custom metadata filename (default: {DEFAULT_METADATA_FILENAME})
   --dry-run             Show what would be done without doing it
   --quiet               Suppress warnings and non-error output
   --help                Show this help message
